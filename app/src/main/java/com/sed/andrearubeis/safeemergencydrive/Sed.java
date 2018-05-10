@@ -8,6 +8,7 @@ import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.graphics.Camera;
 import android.location.Location;
+import android.media.Image;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -40,6 +41,12 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+import retrofit2.Retrofit;
+import retrofit2.converter.gson.GsonConverterFactory;
+
 public class Sed extends AppCompatActivity implements OnMapReadyCallback {
 
     private static final int DEFAULT_ZOOM = 18;
@@ -47,6 +54,7 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback {
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
 
     ImageView locateMeButton;
+    ImageView iconVehicle;
     private GoogleMap mMap;
     LatLng mDefaultLocation;
     FusedLocationProviderClient mFusedLocationProviderClient;
@@ -63,6 +71,7 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback {
         setContentView(R.layout.activity_sed);
 
         locateMeButton = (ImageView) findViewById(R.id.sed_locate_icon);
+        iconVehicle = (ImageView) findViewById(R.id.sed_vehicle_icon);
         // Construct a GeoDataClient.
         mGeoDataClient = Places.getGeoDataClient(this, null);
 
@@ -79,6 +88,8 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback {
                 android.Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED) {
             mLocationPermissionGranted = true;
+        }else{
+            mLocationPermissionGranted = false;
         }
 
 
@@ -243,6 +254,7 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback {
         // Get the current location of the device and set the position of the map.
 
         getDeviceLocation();
+        //getPosition();
     }
 
     /*@Override
@@ -323,6 +335,141 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback {
             }
         }
     }*/
+
+
+    //Aggiunto dal vecchio progetto
+
+    /**
+     * Fa una chiamata al db e scarica l'ultima posizione aggiornata , e la mostra sulla mappa
+     *
+     */
+    public void getPosition() {
+
+        String url = "http://washit.dek4.net/";
+        Retrofit retrofit = new Retrofit.Builder()
+                .baseUrl(url)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build();
+
+        RetrofitAPI service = retrofit.create(RetrofitAPI.class);
+        Call<Gps> call = service.getGpsPosition();
+        call.enqueue(new Callback<Gps>() {
+            @Override
+            public void onResponse(Call<Gps> call, Response<Gps> response) {
+                Log.d(" mainAction", "  response " + response.body().getInfo());
+
+                final Gps posizione = new Gps();
+                posizione.setInfo(response.body().getInfo());
+                posizione.setTimeIstant(response.body().getTimeIstant());
+                posizione.setValidity(response.body().getValidity());
+                posizione.setLatitude(response.body().getLatitude());
+                posizione.setLongitude(response.body().getLongitude());
+                posizione.setVelocity(response.body().getVelocity());
+                posizione.setPosDate(response.body().getPosDate());
+                posizione.setVehicle(response.body().getVehicle());
+
+                Log.d("Main", posizione.toString());
+
+                goToLocation(posizione);
+
+            }
+
+            @Override
+            public void onFailure(Call<Gps> call, Throwable t) {
+                Log.d("MainActivity ", "  error " + t.toString());
+
+            }
+        });
+    }
+
+    public void goToLocation(final Gps posizione) {
+
+
+        /*mapBox.setCameraPosition(new CameraPosition.Builder()
+                .target(posizione.getPosition())
+                .zoom(11)
+                .build());*/
+
+
+            CameraPosition cameraPosition = new CameraPosition.Builder()
+                    .target(posizione.getPosition())
+                    .zoom(DEFAULT_ZOOM)                                 // Sets the center of the map to Maracanã
+                    .bearing(270)                               // Sets the orientation of the camera to look west
+                    .tilt(20)                                   // Sets the tilt of the camera to 30 degrees
+                    .build();                                   // Creates a CameraPosition from the builder
+
+            mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 6000, null);
+            if (posizione.getVehicle().equals("1")) {
+                //Ambulanza
+                iconVehicle.setImageResource(R.drawable.icona_ambulanza);
+            } else {
+                //Vigili del fuoco
+                iconVehicle.setImageResource(R.drawable.icona_vigili_fuoco);
+
+            }
+
+
+        /*mapBox.animateCamera(CameraUpdateFactory.newLatLngZoom(
+                new LatLng(posizione.getPosition().getLatitude() , posizione.getPosition().getLongitude()),11));*/
+        /*mapBox.addMarker(new MarkerOptions()
+                .position(posizione.getPosition())
+                .title("Ambulanza")
+                .snippet("Attenzione")
+        );*/
+    }
+
+    //ALTRO CODICE VECCHIO PROGETTO - runnable con aggiornamento posizione tramite file GeoJSON
+    /*
+
+    //DICHIARAZIONE
+    Handler handler;
+    Runnable runnable;
+
+
+     public void addLayerEmergency() {
+        try {
+            //Log.d("Main" , "Aggiunto il nuovo source1");
+
+            mapBox.addSource(new GeoJsonSource(ID,new URL(URL_GET_DATA)));
+            //Log.d("Main" , "Aggiunto il nuovo source2");
+        } catch (MalformedURLException e) {
+            Log.d("Main" , "Error Source");
+
+            e.printStackTrace();
+        }
+
+        SymbolLayer layer = new SymbolLayer(ID,ID);
+        layer.setProperties(iconImage("rocket-15"));
+        mapBox.addLayer(layer);
+
+        handler = new Handler();
+        runnable = new RefreshData(mapBox,handler);
+        handler.postDelayed(runnable , 300);
+    }
+
+    private class RefreshData implements Runnable {
+        private MapboxMap map;
+        private Handler handler;
+
+        public RefreshData(MapboxMap mapBox, Handler handler) {
+            this.map = mapBox;
+            this.handler = handler;
+        }
+
+        @Override
+        public void run() {
+            ((GeoJsonSource)map.getSource(ID)).setUrl(URL_GET_DATA);
+            getPosition();
+
+            handler.postDelayed(this,300);
+
+        }
+    }
+
+     */
+
+
+
 
 
 }
