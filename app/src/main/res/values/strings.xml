@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">SafeEmergencyDrive</string>
+    <string name="title_activity_sed">Sed</string>
+    <string name="content_descriptor_title_bar">title_bar</string>
+</resources>
