@@ -80,12 +80,20 @@ public class Gps {
         String lat = this.latitude.split(",")[0];
         String lon = this.longitude.split(",")[0];
         Double latDeg = Double.parseDouble(lat.substring(0,2));
+        Log.d("Gps","\nLatDeg vale --> " + latDeg);
+
         Double latMin = Double.parseDouble(lat.substring(2))/60;
         latDeg = latDeg + latMin;
+        Log.d("Gps","\nLatDeg vale --> " + latDeg);
+
 
         Double lonDeg = Double.parseDouble(lon.substring(0,3));
+        Log.d("Gps","\nLongDeg vale --> " + lonDeg);
+
         Double lonMin = Double.parseDouble(lon.substring(3))/60;
         lonDeg = lonDeg + lonMin;
+        Log.d("Gps","\nLongDeg vale --> " + lonDeg);
+
 
 
         Log.d("Gps" , "latitude  :" + latDeg + "    longitude:  " + lonDeg);

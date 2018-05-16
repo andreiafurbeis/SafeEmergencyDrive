@@ -2,43 +2,39 @@ package com.sed.andrearubeis.safeemergencydrive;
 
 
 import android.Manifest;
-import android.app.Dialog;
-import android.content.Intent;
-import android.content.IntentSender;
+import android.content.Context;
 import android.content.pm.PackageManager;
-import android.graphics.Camera;
 import android.location.Location;
-import android.media.Image;
+import android.location.LocationListener;
+import android.location.LocationManager;
+import android.media.MediaPlayer;
 import android.os.Bundle;
+import android.os.Handler;
+import android.provider.MediaStore;
 import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import android.support.constraint.ConstraintLayout;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
-import android.widget.Button;
+import android.view.ViewGroup;
 import android.widget.ImageView;
-import android.widget.Toast;
+import android.widget.TextView;
 
-import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.GooglePlayServicesUtil;
-import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.places.GeoDataClient;
 import com.google.android.gms.location.places.PlaceDetectionClient;
 import com.google.android.gms.location.places.Places;
-import com.google.android.gms.maps.CameraUpdate;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
-import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 
 import retrofit2.Call;
@@ -46,22 +42,55 @@ import retrofit2.Callback;
 import retrofit2.Response;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
+import com.sed.andrearubeis.safeemergencydrive.TouchableSupportMapFragment;
+import com.sed.andrearubeis.safeemergencydrive.TouchableWrapper.*;
 
-public class Sed extends AppCompatActivity implements OnMapReadyCallback {
+public class Sed extends AppCompatActivity implements OnMapReadyCallback , TouchActionDown , TouchActionUp {
 
     private static final int DEFAULT_ZOOM = 18;
     private static final String TAG = "Main";
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
 
+
+
     ImageView locateMeButton;
     ImageView iconVehicle;
-    private GoogleMap mMap;
+    GoogleMap mMap;
     LatLng mDefaultLocation;
     FusedLocationProviderClient mFusedLocationProviderClient;
     PlaceDetectionClient mPlaceDetectionClient;
     GeoDataClient mGeoDataClient;
     Boolean mLocationPermissionGranted;
     Location mLastKnownLocation;
+    LocationManager location_manager;
+    TextView velocity;
+    MediaPlayer media_player;
+
+
+    LocationListener listener = new LocationListener() {
+        @Override
+        public void onLocationChanged(Location location) {
+            getDeviceLocation(1);
+            Log.d("Main","Sono dentro all'onLocationChanged");
+            //avviare controllo sul server
+
+        }
+
+        @Override
+        public void onStatusChanged(String s, int i, Bundle bundle) {
+
+        }
+
+        @Override
+        public void onProviderEnabled(String s) {
+
+        }
+
+        @Override
+        public void onProviderDisabled(String s) {
+
+        }
+    };
 
 
     @Override
@@ -81,30 +110,24 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback {
         // Construct a FusedLocationProviderClient.
         mFusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
 
+        location_manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 
-        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.sed_map);
-        mapFragment.getMapAsync(this);
-        if (ContextCompat.checkSelfPermission(this.getApplicationContext(),
-                android.Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED) {
-            mLocationPermissionGranted = true;
-        }else{
-            mLocationPermissionGranted = false;
-        }
+        velocity = (TextView) findViewById(R.id.sed_velocity);
+
+        media_player = MediaPlayer.create(getApplicationContext(),R.raw.attenzione_mezzo_alice);
 
 
-        locateMeButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                updateLocationUI();
-                getDeviceLocation();
+    }
 
-            }
-        });
+    @Override
+    public void onTouchDown(MotionEvent event) {
+        Log.d("Main","Dentro all'OnTouchDown");
+        location_manager.removeUpdates(listener);
+    }
 
-
-
-
+    @Override
+    public void onTouchUp(MotionEvent event) {
+        Log.d("Main","Dentro all'OnTouchUp");
     }
 
 
@@ -115,22 +138,21 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback {
             return;
         }
         try {
-            if(mLocationPermissionGranted) {
+            if (mLocationPermissionGranted) {
                 mMap.setMyLocationEnabled(true);
                 //mMap.getUiSettings().setMyLocationButtonEnabled(true);
-            }else{
+            } else {
                 mMap.setMyLocationEnabled(false);
                 //mMap.getUiSettings().setMyLocationButtonEnabled(false);
                 getLocationPermission();
             }
-        }
-        catch(SecurityException e) {
+        } catch (SecurityException e) {
             Log.e("Exception: %s", e.getMessage());
         }
     }
 
 
-    private void getDeviceLocation() {
+    private void getDeviceLocation(final int animation_velocity) {
         Log.d(TAG, "Sono dentro al GetDeviceLocation");
 
         /*
@@ -147,13 +169,24 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback {
                             // Set the map's camera position to the current location of the device.
                             mLastKnownLocation = (Location) task.getResult();
                             //Preparo la nuova vista della mappa
+
+                            //imposto la velocitá corrente sulla textview
+                            if(mLastKnownLocation.getSpeed() > 8.0) {
+                                velocity.setVisibility(TextView.VISIBLE);
+                                velocity.setText(mLastKnownLocation.getSpeed() + " Km/h");
+                            }else{
+                                velocity.setVisibility(TextView.INVISIBLE);
+                            }
+                            //Fa parte la voce
+                            //media_player.start();
+
                             CameraPosition cameraPosition = new CameraPosition.Builder()
                                     .target(new LatLng(mLastKnownLocation.getLatitude(), mLastKnownLocation.getLongitude()))
                                     .zoom(DEFAULT_ZOOM)
                                     .tilt(20)
                                     .build();
                             //Faccio partire l'animazione
-                            mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition),3000,null);
+                            mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), animation_velocity, null);
                             //CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLngZoom( new LatLng(mLastKnownLocation.getLatitude(), mLastKnownLocation.getLongitude()),DEFAULT_ZOOM);
                             //mMap.animateCamera(cameraUpdate,3000,null);
 
@@ -166,7 +199,7 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback {
                     }
                 });
             }
-        } catch(SecurityException e)  {
+        } catch (SecurityException e) {
             Log.e("Exception: %s", e.getMessage());
         }
     }
@@ -192,6 +225,7 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback {
     }
 
 
+
     @Override
     public void onRequestPermissionsResult(int requestCode,
                                            @NonNull String permissions[],
@@ -215,31 +249,59 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback {
     protected void onResume() {
         super.onResume();
 
-        //buildGoogleAPIClient();
     }
 
-    /*private void buildGoogleAPIClient() {
-        if (mGoogleApiClient == null) {
-            mGoogleApiClient = new GoogleApiClient.Builder(this)
-                    .addConnectionCallbacks(this)
-                    .addOnConnectionFailedListener(this)
-                    .addApi(LocationServices.API)
-                    .build();
-        }
-    }*/
 
-    /*@Override
-    public void onConnected(@Nullable Bundle bundle) {
-        //findLocation();
-    }*/
 
     protected void onStart() {
-        //mGoogleApiClient.connect();
         super.onStart();
+        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.sed_map);
+        mapFragment.getMapAsync(this);
+        if (ContextCompat.checkSelfPermission(this.getApplicationContext(),
+                android.Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+            mLocationPermissionGranted = true;
+        } else {
+            mLocationPermissionGranted = false;
+        }
+
+
+        locateMeButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                getDeviceLocation(3000);
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                requestUpdateLocation();
+
+            }
+        });
+
+
+
+
+    }
+
+    public void requestUpdateLocation() {
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return;
+        }
+        location_manager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 1, 0, listener);
+
     }
 
     protected void onStop() {
-        //mGoogleApiClient.disconnect();
         super.onStop();
     }
 
@@ -251,10 +313,38 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback {
 
         updateLocationUI();
 
+        getPosition();
+
         // Get the current location of the device and set the position of the map.
 
-        getDeviceLocation();
+        getDeviceLocation(3000);
+        try {
+            Thread.sleep(3000);
+            Log.d("main","Sto aspettando");
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         //getPosition();
+        requestUpdateLocation();
+
+        mMap.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
+            @Override
+            public void onMapClick(LatLng latLng) {
+                Log.d("Main","Le coordinate sono : \n" + "- Latitudine --> " + latLng.latitude + "\n - Longitude --> " + latLng.longitude);
+                float [] distance=new float[1];
+                Location.distanceBetween(mLastKnownLocation.getLatitude(),mLastKnownLocation.getLongitude(),latLng.latitude,latLng.longitude,distance);
+                Log.d("Main","La distanza da quel punto é : " + distance[0]);
+                if(distance[0] < 1000.0) {
+                    media_player.start();
+                }
+            }
+        });
+
+
+
+
+
+
     }
 
     /*@Override
@@ -343,6 +433,7 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback {
      * Fa una chiamata al db e scarica l'ultima posizione aggiornata , e la mostra sulla mappa
      *
      */
+
     public void getPosition() {
 
         String url = "http://washit.dek4.net/";
@@ -369,6 +460,11 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback {
                 posizione.setVehicle(response.body().getVehicle());
 
                 Log.d("Main", posizione.toString());
+                //PROVA
+                LatLng prova = posizione.getPosition();
+
+
+                Log.d("Main" , "Latitude --> " + prova.latitude + "Longitude --> " + prova.longitude);
 
                 goToLocation(posizione);
 
@@ -385,10 +481,6 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback {
     public void goToLocation(final Gps posizione) {
 
 
-        /*mapBox.setCameraPosition(new CameraPosition.Builder()
-                .target(posizione.getPosition())
-                .zoom(11)
-                .build());*/
 
 
             CameraPosition cameraPosition = new CameraPosition.Builder()
@@ -409,14 +501,11 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback {
             }
 
 
-        /*mapBox.animateCamera(CameraUpdateFactory.newLatLngZoom(
-                new LatLng(posizione.getPosition().getLatitude() , posizione.getPosition().getLongitude()),11));*/
-        /*mapBox.addMarker(new MarkerOptions()
-                .position(posizione.getPosition())
-                .title("Ambulanza")
-                .snippet("Attenzione")
-        );*/
+
     }
+
+
+
 
     //ALTRO CODICE VECCHIO PROGETTO - runnable con aggiornamento posizione tramite file GeoJSON
     /*
