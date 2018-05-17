@@ -32,8 +32,11 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 
@@ -45,13 +48,18 @@ import retrofit2.converter.gson.GsonConverterFactory;
 import com.sed.andrearubeis.safeemergencydrive.TouchableSupportMapFragment;
 import com.sed.andrearubeis.safeemergencydrive.TouchableWrapper.*;
 
+import java.util.Iterator;
+import java.util.List;
+
 public class Sed extends AppCompatActivity implements OnMapReadyCallback , TouchActionDown , TouchActionUp {
 
     private static final int DEFAULT_ZOOM = 18;
     private static final String TAG = "Main";
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
+    private static final String url = "http://washit.dek4.net/";
 
-
+    Handler handler;
+    Runnable runnable;
 
     ImageView locateMeButton;
     ImageView iconVehicle;
@@ -65,6 +73,8 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback , Touch
     LocationManager location_manager;
     TextView velocity;
     MediaPlayer media_player;
+    Marker emergency;
+    int contatore=0;
 
 
     LocationListener listener = new LocationListener() {
@@ -73,6 +83,8 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback , Touch
             getDeviceLocation(1);
             Log.d("Main","Sono dentro all'onLocationChanged");
             //avviare controllo sul server
+            //getPosition();
+            getPositionWarning(location);
 
         }
 
@@ -255,6 +267,9 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback , Touch
 
     protected void onStart() {
         super.onStart();
+
+        emergency = null;
+
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.sed_map);
         mapFragment.getMapAsync(this);
         if (ContextCompat.checkSelfPermission(this.getApplicationContext(),
@@ -279,6 +294,8 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback , Touch
 
             }
         });
+
+
 
 
 
@@ -313,7 +330,7 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback , Touch
 
         updateLocationUI();
 
-        getPosition();
+        //getPosition();
 
         // Get the current location of the device and set the position of the map.
 
@@ -433,10 +450,10 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback , Touch
      * Fa una chiamata al db e scarica l'ultima posizione aggiornata , e la mostra sulla mappa
      *
      */
-
+    //versione per richiesta senza dati in uscita
     public void getPosition() {
 
-        String url = "http://washit.dek4.net/";
+
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl(url)
                 .addConverterFactory(GsonConverterFactory.create())
@@ -461,12 +478,19 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback , Touch
 
                 Log.d("Main", posizione.toString());
                 //PROVA
-                LatLng prova = posizione.getPosition();
+                LatLng prova = posizione.getPositionConverted();
 
+
+                mMap.clear();
+
+
+                emergency = mMap.addMarker(new MarkerOptions().position(prova).title("Ambulanza").icon(BitmapDescriptorFactory.fromResource(R.drawable.ambulanza_location)));
+
+                emergency = mMap.addMarker(new MarkerOptions().position(prova).title("Ambulanza").icon(BitmapDescriptorFactory.fromResource(R.drawable.ambulanza)));
 
                 Log.d("Main" , "Latitude --> " + prova.latitude + "Longitude --> " + prova.longitude);
 
-                goToLocation(posizione);
+                //goToLocation(posizione);
 
             }
 
@@ -478,19 +502,101 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback , Touch
         });
     }
 
+    //versione con controllo posizione utente
+    public void getPositionWarning(Location location) {
+
+
+        Retrofit retrofit = new Retrofit.Builder()
+                .baseUrl(url)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build();
+
+        RetrofitAPI service = retrofit.create(RetrofitAPI.class);
+        Call<List<Gps>> call = service.getWarningPosition(location.getLatitude()+"" , location.getLongitude()+"");
+        call.enqueue(new Callback<List<Gps>>() {
+            @Override
+            public void onResponse(Call<List<Gps>> call, Response<List<Gps>> response) {
+
+
+                if(response.body().size() != 0) {
+                    //costruire iteratore
+                    if(contatore % 6 == 0) {
+                        media_player.start();
+
+                    }
+                    contatore = contatore + 1;
+                    mMap.clear();
+                    iconVehicle.setVisibility(View.VISIBLE);
+
+                    for (Iterator iteratore = response.body().iterator(); iteratore.hasNext(); ) {
+                        Gps appoggio = (Gps) iteratore.next();
+                        Log.d("Main", "Stampo la variabile d'appoggio" + appoggio.toString() + "contatore --> " + contatore);
+                        if (appoggio.getVehicle().equals("1")) {
+                            //Ambulanza
+                            iconVehicle.setImageResource(R.drawable.icona_ambulanza);
+                            mMap.addMarker(new MarkerOptions().position(appoggio.getLatLngPosition()).title("Ambulanza").icon(BitmapDescriptorFactory.fromResource(R.drawable.ambulanza)));
+                        } else {
+                            //Vigili del fuoco
+                            iconVehicle.setImageResource(R.drawable.icona_vigili_fuoco);
+                            mMap.addMarker(new MarkerOptions().position(appoggio.getLatLngPosition()).title("Ambulanza").icon(BitmapDescriptorFactory.fromResource(R.drawable.vigili_fuoco)));
+
+
+                        }
+
+
+
+                    }
+                } else {
+                    contatore = 0;
+                    mMap.clear();
+                    iconVehicle.setVisibility(View.INVISIBLE);
+                }
+
+
+
+                //Log.d("Main", posizione.toString());
+                //PROVA
+                //LatLng posizioneLatLng = posizione.getLatLngPosition();
+
+                //toglie tutti i marker dalla mappa e aggiungo quelli aggiornati
+
+
+
+
+
+                //emergency = mMap.addMarker(new MarkerOptions().position(posizioneLatLng).title("Ambulanza").icon(BitmapDescriptorFactory.fromResource(R.drawable.ambulanza)));
+
+
+                //Log.d("Main" , "Latitude --> " + posizioneLatLng.latitude + "Longitude --> " + posizioneLatLng.longitude);
+
+                //goToLocation(posizione);
+            }
+
+            @Override
+            public void onFailure(Call<List<Gps>> call, Throwable t) {
+                Log.d("MainActivity ", "  error " + t.toString());
+
+            }
+
+        });
+    }
+
+
     public void goToLocation(final Gps posizione) {
 
 
 
 
             CameraPosition cameraPosition = new CameraPosition.Builder()
-                    .target(posizione.getPosition())
+                    .target(posizione.getLatLngPosition())
                     .zoom(DEFAULT_ZOOM)                                 // Sets the center of the map to Maracanã
                     .bearing(270)                               // Sets the orientation of the camera to look west
                     .tilt(20)                                   // Sets the tilt of the camera to 30 degrees
                     .build();                                   // Creates a CameraPosition from the builder
 
-            mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 6000, null);
+            CameraPosition camera_position = new CameraPosition.Builder().target(posizione.getLatLngPosition()).zoom(DEFAULT_ZOOM).tilt(20).build();
+
+            mMap.animateCamera(CameraUpdateFactory.newCameraPosition(camera_position), 6000, null);
             if (posizione.getVehicle().equals("1")) {
                 //Ambulanza
                 iconVehicle.setImageResource(R.drawable.icona_ambulanza);
@@ -508,14 +614,14 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback , Touch
 
 
     //ALTRO CODICE VECCHIO PROGETTO - runnable con aggiornamento posizione tramite file GeoJSON
-    /*
+
 
     //DICHIARAZIONE
-    Handler handler;
-    Runnable runnable;
+    //Handler handler;
+    //Runnable runnable;
 
-
-     public void addLayerEmergency() {
+    /*
+     public void addLayerEmergency() {    //MapBox
         try {
             //Log.d("Main" , "Aggiunto il nuovo source1");
 
@@ -535,6 +641,8 @@ public class Sed extends AppCompatActivity implements OnMapReadyCallback , Touch
         runnable = new RefreshData(mapBox,handler);
         handler.postDelayed(runnable , 300);
     }
+
+
 
     private class RefreshData implements Runnable {
         private MapboxMap map;

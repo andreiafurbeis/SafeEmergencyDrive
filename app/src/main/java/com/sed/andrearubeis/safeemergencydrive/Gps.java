@@ -76,7 +76,7 @@ public class Gps {
         return this.info+" , "+this.validity+" , "+this.time_istant+" , "+this.latitude+" , "+this.longitude+" , "+this.velocity+" , "+this.pos_date + " , " + this.vehicle;
     }
 
-    public LatLng getPosition() {
+    public LatLng getPositionConverted() {
         String lat = this.latitude.split(",")[0];
         String lon = this.longitude.split(",")[0];
         Double latDeg = Double.parseDouble(lat.substring(0,2));
@@ -98,6 +98,21 @@ public class Gps {
 
         Log.d("Gps" , "latitude  :" + latDeg + "    longitude:  " + lonDeg);
         return new LatLng(latDeg,lonDeg);
+    }
+
+    public LatLng getLatLngPosition() {
+        return new LatLng(Double.parseDouble(this.getLatitude()),Double.parseDouble(this.getLongitude()));
+    }
+
+    public void copy(Gps daCopiare) {
+        this.setInfo(daCopiare.getInfo());
+        this.setTimeIstant(daCopiare.getTimeIstant());
+        this.setValidity(daCopiare.getValidity());
+        this.setLatitude(daCopiare.getLatitude());
+        this.setLongitude(daCopiare.getLongitude());
+        this.setVelocity(daCopiare.getVelocity());
+        this.setPosDate(daCopiare.getPosDate());
+        this.setVehicle(daCopiare.getVehicle());
     }
 
 }
